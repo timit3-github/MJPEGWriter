@@ -170,13 +170,14 @@ public:
     void write(Mat frame){
     	pthread_mutex_lock(&mutex_writer);
     	if(!frame.empty()){
-    		lastFrame.release();
     		lastFrame = frame.clone();
+            fcount++;
     	}
     	pthread_mutex_unlock(&mutex_writer);
     }
 
 private:
+    volatile int fcount = 0;
     void Listener();
     void Writer();
     void ClientWrite(clientFrame &cf);
