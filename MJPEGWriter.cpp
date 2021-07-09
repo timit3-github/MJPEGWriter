@@ -43,7 +43,7 @@ MJPEGWriter::Listener()
                     pthread_mutex_lock(&mutex_cout);
                     cout << "new client " << client << endl;
                     char headers[4096] = "\0";
-                    int readBytes = _read(client, headers);
+                    _read(client, headers);
                     cout << headers;
                     pthread_mutex_unlock(&mutex_cout);
                     pthread_mutex_lock(&mutex_client);
@@ -65,6 +65,12 @@ MJPEGWriter::Writer()
     const int milis2wait = 16666;
     while (this->isOpened())
     {
+        static auto fcount_bak = fcount;
+        if (fcount_bak == fcount)
+            continue;
+        else
+            fcount_bak = fcount;
+
         pthread_mutex_lock(&mutex_client);
         int num_connected_clients = clients.size();
         pthread_mutex_unlock(&mutex_client);
@@ -75,14 +81,10 @@ MJPEGWriter::Writer()
         pthread_t threads[NUM_CONNECTIONS];
         int count = 0;
 
-        std::vector<uchar> outbuf;
-        std::vector<int> params;
-        params.push_back(CV_IMWRITE_JPEG_QUALITY);
-        params.push_back(quality);
         pthread_mutex_lock(&mutex_writer);
-        imencode(".jpg", lastFrame, outbuf, params);
+        auto outbuf = lastFrame.clone();
+        int outlen = lastFrame.cols;
         pthread_mutex_unlock(&mutex_writer);
-        int outlen = outbuf.size();
 
         pthread_mutex_lock(&mutex_client);
         std::vector<int>::iterator begin = clients.begin();
@@ -93,7 +95,7 @@ MJPEGWriter::Writer()
         {
             if (count > NUM_CONNECTIONS)
                 break;
-            struct clientPayload *cp = new clientPayload({ (MJPEGWriter*)this, { outbuf.data(), outlen, *it } });
+            struct clientPayload *cp = new clientPayload({ (MJPEGWriter*)this, { outbuf.ptr<uchar>(), outlen, *it } });
             payloads.push_back(cp);
             pthread_create(&threads[count], NULL, &MJPEGWriter::clientWrite_Helper, cp);
         }
@@ -102,7 +104,6 @@ MJPEGWriter::Writer()
             pthread_join(threads[count-1], NULL);
             delete payloads.at(count-1);
         }
-        usleep(milis2wait);
     }
 }
 
